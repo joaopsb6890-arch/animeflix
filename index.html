@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0c0a12">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="description" content="Assista anime online, dublado e legendado em português.">
+<title>AnimeFlix</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/svg+xml" href="/static/icons/animeflix.svg">
+<link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/static/styles.css">
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+</head>
+<body>
+
+<header class="shell" data-shell>
+    <button id="backBtn" class="ib hide" title="Voltar" aria-label="Voltar">‹</button>
+    <b id="viewTitle" class="view-title">AnimeFlix</b>
+    <span class="grow"></span>
+    <div class="shell-acts">
+        <button id="searchBtn" class="ib" title="Buscar" aria-label="Buscar"></button>
+        <button id="settingsBtn" class="ib" title="Ajustes" aria-label="Ajustes"></button>
+    </div>
+</header>
+
+<main id="views"></main>
+
+<nav class="tabbar" id="tabbar" aria-label="Navegação"></nav>
+
+<div id="toasts" aria-live="polite"></div>
+
+<script src="/static/core.js"></script>
+<script src="/static/player.js"></script>
+<script src="/static/stack.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

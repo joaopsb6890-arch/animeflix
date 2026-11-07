@@ -1,0 +1,2 @@
+/data/data/com.termux/files/home/AllManga.to-API/.venv/lib/python3.14/site-packages/fastapi/openapi/utils.py:295: UserWarning: Duplicate Operation ID proxy_video_proxy_head for function proxy_video at /data/data/com.termux/files/home/AllManga.to-API/main.py
+  warnings.warn(message, stacklevel=1)

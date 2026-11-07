@@ -1,0 +1,20 @@
+# Artefatos de build do APK (nunca versionar)
+apk/bin/
+apk/obj/
+apk/gen/
+apk/classes.dex
+apk/animeflix.jks
+AnimeFlix.apk
+
+# Chaves e segredos
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc

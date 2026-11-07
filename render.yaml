@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: animeflix
+    runtime: docker
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      - key: PROXY_SECRET
+        generateValue: true
+      - key: SUBDL_KEY      # opcional: chave grátis em subdl.com (legenda PT-BR automática)
+        sync: false
