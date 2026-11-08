@@ -95,7 +95,7 @@ def _cards(html: str) -> list:
             name = (img.get("alt") if img else "") or slug.replace("-", " ")
         seen.add(slug)
         out.append({"slug": slug, "name": name,
-                    "dub": slug.endswith("-dublado") or "dublado" in name.lower()})
+                    "dub": slug.endswith("-dublado") or "-dublado" in slug or "dublado" in name.lower()})
     return out
 
 
