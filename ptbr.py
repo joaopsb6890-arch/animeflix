@@ -209,7 +209,18 @@ async def streams(client, show_id: str, episode: str, dub: bool, title: str = ""
     if not slug:
         return [], [f"ptbr: '{title or titles[1]}' não tem versão {kind} em português"]
     try:
-        return await episode_sources(client, slug, episode, dub), log
+        sources = None
+        for attempt in range(3):
+            try:
+                sources = await episode_sources(client, slug, episode, dub)
+                if sources:                     # got sources, exit loop
+                    break
+                await asyncio.sleep(1)
+            except Exception as e:                  # noqa: BLE001
+                if attempt == 2:                # last attempt
+                    log.append(f"{slug} ep {episode} — {type(e).__name__}: {str(e)[:100]}")
+                await asyncio.sleep(1)        # back‑off before next try
+        return sources if sources else [], log
     except Exception as e:                  # noqa: BLE001
         return [], [f"ptbr: {slug} ep {episode} — {type(e).__name__}: {str(e)[:100]}"]
 
