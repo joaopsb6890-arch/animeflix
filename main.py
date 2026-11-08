@@ -357,10 +357,19 @@ async def config():
     """O que este servidor oferece — o app usa para esconder o que não funciona."""
     return {"name": "AnimeFlix", "version": app.version,
             "features": {"subdl": subs.have_key(), "ptbr": True, "tmdb": movies.have_tmdb(),
+                         "youtube": movies.have_youtube(),
                          "upstream": upstream.enabled()}}
 
 
 # ── filmes e séries ───────────────────────────────────────────────────────────
+@app.get("/api/trailer")
+async def trailer(q: str = Query(..., min_length=2, max_length=120)):
+    try:
+        return {"videoId": await movies.youtube_trailer(await get_client(), q)}
+    except Exception as e:
+        raise _fail(e)
+
+
 @app.get("/movies/list")
 async def movies_list(which: str = Query("trending", pattern="^(trending|popular|top)$"),
                       kind: str = Query("movie", pattern="^(movie|tv)$"), page: int = Query(1, ge=1, le=20)):

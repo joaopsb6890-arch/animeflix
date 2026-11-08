@@ -11,5 +11,7 @@ services:
         sync: false
       - key: ANIWATCH_API  # opcional: URL de uma instância do aniwatch-api (fonte reserva)
         sync: false
+      - key: YOUTUBE_KEY   # opcional: Google YouTube Data API v3 (botão Trailer)
+        sync: false
       - key: SUBDL_KEY      # opcional: chave grátis em subdl.com (legenda PT-BR automática)
         sync: false

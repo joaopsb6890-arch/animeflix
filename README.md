@@ -47,6 +47,9 @@ O app não liga fontes de streaming sem licença para filmes e séries.
 ## Fonte reserva do GitHub (opcional)
 Hospede uma instância do [aniwatch-api](https://github.com/ghoshRitesh12/aniwatch-api) e informe `ANIWATCH_API=https://sua-instancia`. Quando o scraper interno falhar, o app tenta ela.
 
+## APIs do Google (opcional)
+`YOUTUBE_KEY` (console.cloud.google.com → ativar *YouTube Data API v3* → criar chave): liga o botão **Trailer** na ficha dos animes e toca o trailer dentro do app.
+
 ## Dublagem não aparece? Diagnóstico
 Abra no navegador (troque o endereço e o id do anime):
 

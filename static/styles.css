@@ -1094,3 +1094,7 @@ button.big.play { background: rgba(232, 54, 95, .62); }
 :focus-visible { outline: 2px solid var(--acc2); outline-offset: 2px; }
 .rail-row { scroll-padding-left: 16px; }
 body.at-home #toasts { bottom: calc(var(--tabs) + 14px + var(--sab)); }
+
+.trailer { position: fixed; inset: 0; z-index: 90; background: #000; display: flex; align-items: center; justify-content: center; }
+.trailer iframe { width: 100%; max-height: 100%; aspect-ratio: 16 / 9; border: 0; }
+.trailer .ib { position: absolute; top: calc(10px + var(--sat)); right: 12px; z-index: 2; background: rgba(0,0,0,.6); border-radius: 50%; }

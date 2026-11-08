@@ -561,7 +561,7 @@ AF.Player = class Player {
             this.setLoad('');
             this.note('<span class="bad">Ep ' + AF.esc(this.epNum()) + ' sem fonte jogável</span><small>' +
                 AF.esc(this.allLogs || this.lastLog || 'nenhum servidor respondeu') + '</small>', 0,
-                { label: 'tentar de novo', run: () => this.loadEpisode(idx, opts) });
+                { label: 'diagnóstico', run: () => this.showDiagnose() });
             return;
         }
         this.setLoad('');
@@ -1535,6 +1535,24 @@ AF.Player = class Player {
         if (!this._keyFn) return;
         document.removeEventListener('keydown', this._keyFn);
         this._keyFn = null;
+    }
+
+    /* mostra por que o áudio escolhido não foi achado (mesma rota /anime/diagnose) */
+    async showDiagnose() {
+        const tt = this.pref || this.tt;
+        AF.toast('Verificando fontes…', 1800);
+        let d;
+        try {
+            d = await AF.apiGet('/anime/diagnose/' + encodeURIComponent(String(this.ctx.animeId)) + '?ep=' +
+                encodeURIComponent(this.epNum()) + '&tt=' + tt + '&title=' + encodeURIComponent(this.ctx.animeName || ''), { noCache: true });
+        } catch (e) { d = { erro: e.message }; }
+        const lines = [].concat(d.trace || [], d.log || [], d.erro ? ['erro: ' + d.erro] : [],
+            ['fontes achadas: ' + ((d.sources || []).length), 'site PT-BR: ' + (d.ptbrBase || '-'), 'aniwatch-api ligada: ' + (d.upstream ? 'sim' : 'não')]);
+        AF.openSheet({
+            title: 'Diagnóstico · ' + (AF.AUDIO[tt] || {}).label,
+            sub: 'tire um print e mande para quem mantém o app',
+            items: lines.map(l => ({ label: l })).concat([{ label: 'Tentar de novo', run: () => this.loadEpisode(this.epIdx, {}) }]),
+        });
     }
 
     destroy() {

@@ -103,6 +103,33 @@ async def detail(client, kind: str, tmdb_id: int) -> dict:
     return await _cached(("detail", kind, tmdb_id), 3600, make)
 
 
+# ── YouTube Data API (Google): trailer oficial de qualquer título ───────────────
+YT_KEY = os.environ.get("YOUTUBE_KEY", "").strip()
+
+
+def have_youtube() -> bool:
+    return bool(YT_KEY)
+
+
+async def youtube_trailer(client, q: str) -> str:
+    """id do vídeo do trailer (só vídeos que permitem embed). Chave grátis: console.cloud.google.com
+    → ativar "YouTube Data API v3" → criar chave de API."""
+    if not YT_KEY:
+        raise LookupError("defina YOUTUBE_KEY no servidor")
+
+    async def make():
+        r = await client.get("https://www.googleapis.com/youtube/v3/search", timeout=15, params={
+            "part": "snippet", "q": q + " trailer oficial", "type": "video", "maxResults": 1,
+            "videoEmbeddable": "true", "safeSearch": "moderate", "key": YT_KEY})
+        r.raise_for_status()
+        items = r.json().get("items") or []
+        return items[0]["id"]["videoId"] if items else ""
+    vid = await _cached(("yt", q.lower()), 86400, make)
+    if not vid:
+        raise LookupError("trailer não encontrado")
+    return vid
+
+
 # ── Internet Archive: filmes de domínio público ────────────────────────────────
 def _arch_item(x: dict) -> dict:
     ident = x.get("identifier", "")

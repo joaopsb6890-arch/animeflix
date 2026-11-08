@@ -674,6 +674,22 @@
         }, 0);
     };
 
+    /* trailer dentro do app (YouTube, sem sair da tela) */
+    AF.playTrailer = (videoId) => {
+        const box = el('div', 'trailer', '<button class="ib" aria-label="fechar">' + AF.icon('close') + '</button>' +
+            '<iframe allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen ' +
+            'src="https://www.youtube-nocookie.com/embed/' + encodeURIComponent(videoId) + '?autoplay=1&playsinline=1&rel=0"></iframe>');
+        $('button', box).onclick = () => box.remove();
+        document.body.appendChild(box);
+    };
+
+    AF.trailerFor = async (query) => {
+        try {
+            const d = await AF.apiGet('/api/trailer?q=' + encodeURIComponent(query));
+            AF.playTrailer(d.videoId);
+        } catch (e) { AF.toast('Trailer não encontrado', 3000); }
+    };
+
     AF.openTitle = async (item) => {
         if (item.kind === 'archive') {
             return AF.openSheet({
@@ -695,7 +711,7 @@
         if (w.stream && w.stream.length) items.push({ head: 'Para assistir no Brasil: ' + w.stream.join(', ') });
         else if ((w.rent && w.rent.length) || (w.buy && w.buy.length)) items.push({ head: 'Aluguel ou compra: ' + (w.rent || []).concat(w.buy || []).filter((x, i, a) => a.indexOf(x) === i).slice(0, 5).join(', ') });
         else items.push({ head: 'Não achei onde assistir legalmente no Brasil agora.' });
-        if (d.trailer) items.push({ label: 'Ver trailer', hint: 'abre o YouTube', run: () => { window.open('https://www.youtube.com/watch?v=' + d.trailer, '_blank'); return 'keep'; } });
+        if (d.trailer) items.push({ label: 'Ver trailer', hint: 'toca aqui mesmo', run: () => { setTimeout(() => AF.playTrailer(d.trailer), 220); } });
         if (w.link) items.push({ label: 'Ver todas as opções para assistir', run: () => { window.open(w.link, '_blank'); return 'keep'; } });
         const fid = d.kind + ':' + d.id;
         items.push({
@@ -888,6 +904,7 @@
             '<button class="btn" data-act="resume">Continuar</button>' +
             '<button class="btn" data-act="fav">♡</button>' +
             '<button class="btn" data-act="later">Depois</button>' +
+            (AF.features.youtube ? '<button class="btn" data-act="trailer">Trailer</button>' : '') +
             '<button class="btn ghost" data-act="refresh" title="recarregar" aria-label="recarregar">↻</button>' +
             '</div>' +
             '<div class="audio-pick" data-audio></div>' +
@@ -933,6 +950,7 @@
                     thumb: ctx.poster || card.thumbnail, ep: String(ep), tt: AF.cfg.data.tt });
                 AF.toast(ok ? 'Ep ' + ep + ' na fila de depois' : 'já estava na fila');
             },
+            trailer: () => AF.trailerFor((ctx.name || (ctx.card && ctx.card.name) || '') + ' anime'),
             refresh: () => { ctx.eps = null; loadEpisodes(frame, true); loadDetails(frame); },
         };
         AF.$$('[data-act]', frame.node).forEach(b => {
