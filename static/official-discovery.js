@@ -1,4 +1,4 @@
-/* Discovery for legally licensed anime: metadata APIs + links to official services. */
+/* Busca metadados e encaminha para catálogos licenciados; não reproduz nem coleta vídeos. */
 (() => {
     'use strict';
 
@@ -9,11 +9,13 @@
         { name: 'Disney+', url: q => `https://www.disneyplus.com/search?q=${encodeURIComponent(q)}` },
     ];
     const GRAPHQL = 'https://graphql.anilist.co';
-    const QUERY = `query ($search: String) {
-      Media(search: $search, type: ANIME, isAdult: false) {
-        id siteUrl title { romaji english native } coverImage { large } description(asHtml: false)
-        seasonYear averageScore episodes format genres
-        externalLinks { site url type }
+    const ANILIST_QUERY = `query ($search: String) {
+      Page(page: 1, perPage: 8) {
+        media(search: $search, type: ANIME, isAdult: false) {
+          id siteUrl title { romaji english native } coverImage { large } description(asHtml: false)
+          seasonYear averageScore episodes format genres
+          externalLinks { site url type }
+        }
       }
     }`;
 
@@ -28,12 +30,12 @@
         const res = await fetch(GRAPHQL, {
             method: 'POST', signal,
             headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-            body: JSON.stringify({ query: QUERY, variables: { search: term } }),
+            body: JSON.stringify({ query: ANILIST_QUERY, variables: { search: term } }),
         });
         if (!res.ok) throw new Error(`AniList respondeu HTTP ${res.status}`);
         const body = await res.json();
         if (body.errors?.length) throw new Error('AniList não conseguiu completar a busca.');
-        return body.data?.Media ? [body.data.Media] : [];
+        return body.data?.Page?.media || [];
     }
 
     async function searchJikan(term, signal) {
@@ -54,6 +56,29 @@
             genres: (item.genres || []).map(g => g.name),
             externalLinks: [],
         }));
+    }
+
+    async function searchKitsu(term, signal) {
+        const url = `https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(term)}&page[limit]=8`;
+        const res = await fetch(url, { signal, headers: { Accept: 'application/vnd.api+json' } });
+        if (!res.ok) throw new Error(`Kitsu respondeu HTTP ${res.status}`);
+        const body = await res.json();
+        return (body.data || []).map(item => {
+            const a = item.attributes || {};
+            return {
+                id: item.id,
+                siteUrl: a.slug ? `https://kitsu.io/anime/${encodeURIComponent(a.slug)}` : 'https://kitsu.io/anime',
+                title: { romaji: a.titles?.en_jp || a.canonicalTitle, english: a.titles?.en || a.canonicalTitle, native: a.titles?.ja_jp },
+                coverImage: { large: a.posterImage?.large || a.posterImage?.original || '' },
+                description: a.synopsis || '',
+                seasonYear: a.startDate ? Number(a.startDate.slice(0, 4)) : null,
+                averageScore: a.averageRating ? Math.round(Number(a.averageRating)) : null,
+                episodes: a.episodeCount,
+                format: a.subtype,
+                genres: [],
+                externalLinks: [],
+            };
+        });
     }
 
     function serviceLink(label, href) {
@@ -111,15 +136,13 @@
         const section = node('section', 'official-discovery');
         section.id = 'official-discovery';
         section.setAttribute('aria-labelledby', 'od-title');
-        const head = node('div', 'od-heading');
-        const copy = node('div');
-        copy.append(node('h2', '', 'Descubra onde assistir legalmente'),
-            node('p', '', 'Pesquise informações de anime e abra os catálogos oficiais. A disponibilidade e a dublagem variam por país e título.'));
-        head.appendChild(copy);
-        section.appendChild(head);
+        const heading = node('h2', '', 'Descubra onde assistir legalmente');
+        heading.id = 'od-title';
+        section.appendChild(heading);
+        section.appendChild(node('p', 'od-intro', 'Pesquise informações do anime e abra os catálogos oficiais. A disponibilidade e a dublagem PT-BR variam por título e região; confirme diretamente no serviço.'));
 
         const form = node('form', 'od-form');
-        const input = node('input', '');
+        const input = node('input');
         input.type = 'search';
         input.name = 'anime';
         input.placeholder = 'Ex.: Jujutsu Kaisen';
@@ -130,7 +153,7 @@
         button.type = 'submit';
         form.append(input, button);
         section.appendChild(form);
-        const status = node('p', 'od-status', 'Metadados: AniList, com Jikan como alternativa.');
+        const status = node('p', 'od-status', 'Metadados de AniList, com Jikan e Kitsu como alternativas.');
         status.setAttribute('role', 'status');
         status.setAttribute('aria-live', 'polite');
         section.appendChild(status);
@@ -142,25 +165,32 @@
             event.preventDefault();
             const term = input.value.trim();
             if (!term) return;
-            if (controller) controller.abort();
+            controller?.abort();
             controller = new AbortController();
             button.disabled = true;
             status.textContent = 'Buscando informações…';
             results.replaceChildren();
+            const providers = [['AniList', searchAniList], ['Jikan', searchJikan], ['Kitsu', searchKitsu]];
             try {
                 let items = [];
-                try { items = await searchAniList(term, controller.signal); }
-                catch (err) {
-                    if (err.name === 'AbortError') return;
-                    status.textContent = 'AniList indisponível; tentando a API alternativa…';
+                const failures = [];
+                for (const [name, search] of providers) {
+                    try {
+                        items = await search(term, controller.signal);
+                        if (items.length) break;
+                    } catch (err) {
+                        if (err.name === 'AbortError') return;
+                        failures.push(name);
+                    }
                 }
-                if (!items.length) items = await searchJikan(term, controller.signal);
                 if (!items.length) {
-                    status.textContent = 'Nenhum resultado encontrado. Tente o título em inglês ou japonês.';
+                    status.textContent = failures.length === providers.length
+                        ? 'As APIs de catálogo estão indisponíveis. Tente novamente mais tarde.'
+                        : 'Nenhum resultado encontrado. Tente o título em inglês ou japonês.';
                     return;
                 }
                 items.forEach(item => results.appendChild(makeCard(item, term)));
-                status.textContent = 'Confira a disponibilidade diretamente nos serviços oficiais; estes links não garantem que o título esteja no seu catálogo nem que tenha dublagem.';
+                status.textContent = 'Links levam a serviços oficiais. Eles não garantem disponibilidade no seu país nem confirmam que o título tenha dublagem.';
             } catch (err) {
                 if (err.name !== 'AbortError') status.textContent = 'Não foi possível consultar os catálogos agora. Tente novamente mais tarde.';
             } finally {
@@ -170,13 +200,13 @@
         return section;
     }
 
-    const observer = new MutationObserver(() => {
+    function attachWidgets() {
         document.querySelectorAll('.home').forEach(home => {
-            if (!home.querySelector('#official-discovery')) home.prepend(buildWidget());
+            if (!home.querySelector('.official-discovery')) home.prepend(buildWidget());
         });
-    });
+    }
+
+    const observer = new MutationObserver(attachWidgets);
     observer.observe(document.documentElement, { childList: true, subtree: true });
-    document.querySelectorAll('.home').forEach(home => {
-        if (!home.querySelector('#official-discovery')) home.prepend(buildWidget());
-    });
+    attachWidgets();
 })();

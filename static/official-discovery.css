@@ -4,24 +4,24 @@
     padding: clamp(18px, 3vw, 30px);
     border: 1px solid rgba(255,255,255,.1);
     border-radius: 22px;
-    background: linear-gradient(135deg, rgba(111,75,220,.18), rgba(22,20,31,.96) 55%);
+    background: linear-gradient(135deg, rgba(111,75,220,.2), rgba(22,20,31,.97) 55%);
+    color: inherit;
 }
-.od-heading h2 { margin: 0 0 7px; font-size: clamp(1.25rem, 3vw, 1.8rem); }
-.od-heading p, .od-meta, .od-status { color: var(--muted, #aaa); }
-.od-heading p { max-width: 760px; margin: 0 0 18px; line-height: 1.5; }
+.official-discovery h2 { margin: 0 0 7px; font-size: clamp(1.25rem, 3vw, 1.8rem); }
+.od-intro { max-width: 760px; margin: 0 0 18px; color: var(--muted, #aaa); line-height: 1.5; }
 .od-form { display: flex; gap: 9px; max-width: 680px; }
-.od-form input { flex: 1; min-width: 0; padding: 12px 14px; border: 1px solid rgba(255,255,255,.15); border-radius: 12px; color: inherit; background: rgba(0,0,0,.24); }
+.od-form input { flex: 1; min-width: 0; padding: 12px 14px; border: 1px solid rgba(255,255,255,.15); border-radius: 12px; color: inherit; background: rgba(0,0,0,.24); font: inherit; }
 .od-submit, .od-link { min-height: 40px; padding: 9px 13px; border: 1px solid rgba(255,255,255,.14); border-radius: 10px; color: inherit; background: rgba(255,255,255,.07); text-decoration: none; font: inherit; }
 .od-submit { cursor: pointer; background: #754fe0; border-color: #754fe0; font-weight: 700; }
 .od-submit:disabled { opacity: .6; cursor: wait; }
-.od-status { min-height: 1.4em; font-size: .9rem; line-height: 1.5; }
+.od-status { min-height: 1.4em; color: var(--muted, #aaa); font-size: .9rem; line-height: 1.5; }
 .od-results { display: grid; gap: 12px; }
-.od-card { display: flex; gap: 15px; padding: 13px; border-radius: 15px; background: rgba(0,0,0,.2); }
+.od-card { display: flex; gap: 15px; padding: 13px; border: 1px solid rgba(255,255,255,.06); border-radius: 15px; background: rgba(0,0,0,.2); }
 .od-cover { width: 76px; height: 108px; flex: 0 0 76px; object-fit: cover; border-radius: 9px; background: #1c1a25; }
 .od-info { min-width: 0; }
 .od-info h3 { margin: 0 0 5px; }
 .od-info p { margin: 5px 0; }
-.od-meta { font-size: .85rem; }
+.od-meta { color: var(--muted, #aaa); font-size: .85rem; }
 .od-description { max-width: 850px; color: #ddd; font-size: .9rem; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .od-links { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
 .od-link { display: inline-flex; align-items: center; min-height: 34px; font-size: .82rem; }
