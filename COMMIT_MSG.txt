@@ -1,0 +1,13 @@
+Fix dubbed slug detection in ptbr.py
+
+- Expand dubbed slug detection to also match `-dublado` anywhere in the slug,
+  not just at the end, and also consider the word "dublado" in the link
+  title/name. This increases the chances of correctly identifying dubbed
+  content on the source site, ensuring that dubbed video streams are
+  returned by the `/anime/stream` endpoint.
+
+This fixes the issue where dubbed anime videos were not playing because
+the detection logic missed slugs that contain "dublado" that aren't at the
+slug end.
+
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
