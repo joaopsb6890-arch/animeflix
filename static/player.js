@@ -541,14 +541,17 @@ AF.Player = class Player {
             this.sources = opts.sources;
         } else {
             this.sources = [];
-            const chain = (AF.AUDIO_CHAIN[want] || AF.AUDIO_CHAIN.sub);
+            const tried = [];
+            const chain = this.ctx.single ? ['sub'] : (AF.AUDIO_CHAIN[want] || AF.AUDIO_CHAIN.sub);
             for (let i = 0; i < chain.length; i++) {
                 const tt = chain[i];
                 if (i > 0) this.setLoad('sem ' + AF.AUDIO[chain[i - 1]].label + ' — tentando ' + AF.AUDIO[tt].label + '…');
                 const list = await this.fetchSources(tt, i === 0 ? (opts.server || AF.cfg.data.server || '') : '');
                 if (this.destroyed || this.epIdx !== idx) return;
                 if (list.length) { this.sources = list; this.tt = tt; break; }
+                tried.push(AF.AUDIO[tt].label + ': ' + (this.lastLog || 'sem resposta'));
             }
+            this.allLogs = tried.join(' | ');
         }
         if (this.sources.length && this.tt !== want && !opts.sources) {
             AF.toast('Este episódio não tem “' + AF.AUDIO[want].label + '”. Tocando: ' + AF.AUDIO[this.tt].label + '.', 5200,
@@ -557,7 +560,7 @@ AF.Player = class Player {
         if (!this.sources.length) {
             this.setLoad('');
             this.note('<span class="bad">Ep ' + AF.esc(this.epNum()) + ' sem fonte jogável</span><small>' +
-                AF.esc(this.lastLog || 'nenhum servidor respondeu') + '</small>', 0,
+                AF.esc(this.allLogs || this.lastLog || 'nenhum servidor respondeu') + '</small>', 0,
                 { label: 'tentar de novo', run: () => this.loadEpisode(idx, opts) });
             return;
         }
@@ -568,7 +571,7 @@ AF.Player = class Player {
     }
 
     async fetchSources(tt, server) {
-        const path = '/anime/stream/' + encodeURIComponent(this.ctx.animeId) +
+        const path = (this.ctx.streamBase || '/anime/stream/') + encodeURIComponent(String(this.ctx.animeId).replace(/^ia:/, '')) +
             '?ep=' + encodeURIComponent(this.epNum()) + '&translationType=' + tt +
             '&title=' + encodeURIComponent(this.ctx.animeName || '') +
             (server ? '&server=' + encodeURIComponent(server) : '');
@@ -1032,6 +1035,25 @@ AF.Player = class Player {
         AF.$('.ib[data-act="theater"]', this.root).classList.toggle('on', this.theater);
     }
 
+    /* abre o episódio já em tela cheia e deitado (só em celular/tablet) */
+    autoFullscreen() {
+        if (!AF.cfg.data.autoFs || !window.matchMedia || !matchMedia('(pointer: coarse)').matches) return;
+        const el = this.root;
+        if (document.fullscreenElement || document.webkitFullscreenElement) return;
+        const lock = () => {
+            try { screen.orientation.lock('landscape').catch(() => {}); } catch (e) { /* sem suporte */ }
+        };
+        if (window.Android && window.Android.setLandscape) { try { window.Android.setLandscape(true); } catch (e) {} }
+        const p = el.requestFullscreen ? el.requestFullscreen() :
+            (el.webkitRequestFullscreen ? el.webkitRequestFullscreen() : null);
+        if (p && p.then) p.then(lock).catch(() => {}); else lock();
+    }
+
+    releaseOrientation() {
+        try { screen.orientation.unlock(); } catch (e) { /* sem suporte */ }
+        if (window.Android && window.Android.setLandscape) { try { window.Android.setLandscape(false); } catch (e) {} }
+    }
+
     toggleFs() {
         const el = this.root;
         const isFs = () => document.fullscreenElement || document.webkitFullscreenElement;
@@ -1361,7 +1383,7 @@ AF.Player = class Player {
                 html: '<i class="sw" style="background:' + c + '"></i> ' + c, on: s.color === c,
                 run: () => { AF.cfg.setSub({ color: c }); this.subs.setStyle(AF.cfg.data.sub); } })),
             { head: 'altura na tela' },
-            ...[30, 50, 72, 88].map(p => ({ html: 'posição ' + p + '%', on: s.pos === p, run: () => { AF.cfg.setSub({ pos: p }); this.subs.setStyle(AF.cfg.data.sub); } })),
+            ...[[70, 'alta'], [80, 'média'], [90, 'baixa'], [95, 'bem baixa']].map(([p, nm]) => ({ html: 'posição ' + nm, on: s.pos === p, run: () => { AF.cfg.setSub({ pos: p }); this.subs.setStyle(AF.cfg.data.sub); } })),
         ] };
     }
 
@@ -1517,6 +1539,7 @@ AF.Player = class Player {
 
     destroy() {
         this.destroyed = true;
+        this.releaseOrientation();
         this.saveProgress();
         this.clearTimers();
         this.destroyMedia();

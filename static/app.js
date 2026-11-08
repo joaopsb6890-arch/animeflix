@@ -166,6 +166,7 @@
                 { head: 'reprodução' },
                 chooser('Áudio preferido', 'tt', ['dub-pt', 'sub-pt', 'sub', 'dub'].map(k => ({ label: AF.AUDIO[k].label, value: k })),
                     'se não existir para o episódio, o app tenta o próximo da lista'),
+                tog('Abrir episódio em tela cheia (celular)', 'autoFs', 'e gira para horizontal sozinho'),
                 tog('Buscar legenda em português sozinho', 'autoPtSub', 'quando o vídeo vier sem legenda PT-BR'),
                 chooser('Proporção da imagem', 'fit', [
                     { label: 'conter', value: 'contain' }, { label: 'preencher', value: 'cover' },
@@ -265,6 +266,7 @@
     AF.openMore = () => AF.openSheet({
         title: 'Mais',
         items: () => [
+            { label: 'Histórico', hint: 'o que você já assistiu', run: () => { AF.nav.goTab('history'); } },
             { label: 'Ajustes', hint: 'áudio, legenda e player', run: () => { setTimeout(AF.openSettings, 260); } },
             { label: 'Idioma e dublagem', hint: AF.AUDIO[AF.cfg.data.tt].label, run: () => { setTimeout(AF.askLanguage, 260); } },
             { label: 'Atalhos e gestos', run: () => { setTimeout(AF.showHelp, 260); } },
@@ -297,7 +299,7 @@
     function boot() {
         AF.nav.init();
 
-        AF.loadConfig();
+        AF._cfgP = AF.loadConfig();
         if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
             navigator.serviceWorker.register('/sw.js').catch(() => { });
         }

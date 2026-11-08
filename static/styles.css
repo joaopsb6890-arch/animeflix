@@ -532,7 +532,7 @@ video.pl-v {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
-    bottom: 72%;
+    bottom: 10%;
     max-width: 94%;
     width: -moz-fit-content;
     width: fit-content;

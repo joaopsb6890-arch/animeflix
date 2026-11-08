@@ -28,11 +28,12 @@ from urllib.parse import quote, urljoin, urlparse
 import httpx
 from bs4 import BeautifulSoup
 
-BASE = os.environ.get("PTBR_BASE", "https://animefire.plus").rstrip("/")
+BASES = [b.strip().rstrip("/") for b in os.environ.get(
+    "PTBR_BASE", "https://animefire.plus,https://animefire.io,https://animefire.net").split(",") if b.strip()]
+BASE = BASES[0]                  # o que respondeu por último fica primeiro (ver _get)
 UA = ("Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
-HEADERS = {"User-Agent": UA, "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.5",
-           "Referer": BASE + "/"}
+HEADERS = {"User-Agent": UA, "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.5"}
 MATCH_MIN = 0.62          # nota mínima (0–1) para aceitar um resultado da busca
 TTL = 1800
 
@@ -66,15 +67,40 @@ def norm(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", text).strip()
 
 
+def _score(a: str, b: str) -> float:
+    a, b = norm(a), norm(b)
+    if not a or not b:
+        return 0.0
+    ta, tb = set(a.split()), set(b.split())
+    jac = len(ta & tb) / len(ta | tb) if ta | tb else 0
+    return max(difflib.SequenceMatcher(None, a, b).ratio(), jac)
+
+
 def title_from_slug(show_id: str) -> str:
     """'one-piece-100' (slug do hianime) → 'one piece'."""
     return re.sub(r"-\d+$", "", str(show_id or "")).replace("-", " ").strip()
 
 
 async def _get(client: httpx.AsyncClient, url: str, **kw) -> httpx.Response:
-    r = await client.get(url, headers={**HEADERS, **kw.pop("headers", {})}, **kw)
-    r.raise_for_status()
-    return r
+    """GET que troca de domínio sozinho: `url` pode começar por qualquer BASE."""
+    global BASE
+    path = url
+    for b in BASES:
+        if url.startswith(b):
+            path = url[len(b):]
+            break
+    last = None
+    for b in [BASE] + [x for x in BASES if x != BASE]:
+        try:
+            hdr = {**HEADERS, "Referer": b + "/", **kw.get("headers", {})}
+            r = await client.get(b + path, headers=hdr,
+                                 **{k: v for k, v in kw.items() if k != "headers"})
+            r.raise_for_status()
+            BASE = b
+            return r
+        except httpx.HTTPError as e:
+            last = e
+    raise last
 
 
 def _cards(html: str) -> list:
@@ -95,11 +121,11 @@ def _cards(html: str) -> list:
             name = (img.get("alt") if img else "") or slug.replace("-", " ")
         seen.add(slug)
         out.append({"slug": slug, "name": name,
-                    "dub": slug.endswith("-dublado") or "-dublado" in slug or "dublado" in name.lower()})
+                    "dub": slug.endswith("-dublado") or "dublado" in name.lower()})
     return out
 
 
-async def find_slug(client, titles: list, dub: bool):
+async def find_slug(client, titles: list, dub: bool, trace: list | None = None):
     """Melhor slug para qualquer um dos títulos candidatos, ou None."""
     key = ("slug", tuple(norm(t) for t in titles), dub)
     hit = _slugs.get(key)
@@ -110,15 +136,20 @@ async def find_slug(client, titles: list, dub: bool):
         q = re.sub(r"[^\w\s]", " ", title).strip()
         if not q:
             continue
+        url = f"{BASE}/pesquisar/{quote(q.replace(' ', '-'))}"
         try:
-            r = await _get(client, f"{BASE}/pesquisar/{quote(q.replace(' ', '-'))}")
-        except httpx.HTTPError:
+            r = await _get(client, url)
+        except httpx.HTTPError as e:
+            if trace is not None:
+                trace.append(f"busca {url} falhou: {type(e).__name__} {str(e)[:60]}")
             continue
-        for card in _cards(r.text):
+        found_cards = _cards(r.text)
+        if trace is not None:
+            trace.append(f"busca '{q}': {len(found_cards)} resultados ({sum(1 for c in found_cards if c['dub'] == dub)} {'dublados' if dub else 'legendados'})")
+        for card in found_cards:
             if card["dub"] != dub:
                 continue
-            score = max(difflib.SequenceMatcher(None, norm(title), norm(card["name"])).ratio(),
-                        difflib.SequenceMatcher(None, norm(title), norm(card["slug"])).ratio())
+            score = max(_score(title, card["name"]), _score(title, card["slug"].replace("-", " ")))
             if score > best_score:
                 best, best_score = card, score
         if best_score >= 0.9:
@@ -197,39 +228,33 @@ async def episode_sources(client, slug: str, ep: str, dub: bool) -> list:
     return out
 
 
-async def streams(client, show_id: str, episode: str, dub: bool, title: str = "") -> tuple:
+async def streams(client, show_id: str, episode: str, dub: bool, title: str = "",
+                  trace: list | None = None) -> tuple:
     """(fontes, log) — mesma forma de hianime.streams()."""
-    log = []
-    titles = [title, title_from_slug(show_id)]
+    import titles as _titles
+    tr = trace if trace is not None else []
+    names = await _titles.candidates(client, show_id, title)
+    tr.append("títulos tentados: " + " | ".join(names))
     try:
-        slug = await find_slug(client, titles, dub)
+        slug = await find_slug(client, names, dub, tr)
     except Exception as e:                  # noqa: BLE001 — qualquer falha vira log
         return [], [f"ptbr: busca falhou — {type(e).__name__}: {str(e)[:100]}"]
     kind = "dublado" if dub else "legendado"
     if not slug:
-        return [], [f"ptbr: '{title or titles[1]}' não tem versão {kind} em português"]
+        return [], [f"ptbr: sem versão {kind} em PT-BR para '{names[0] if names else show_id}' (" + "; ".join(tr)[:200] + ")"]
+    tr.append("slug escolhido: " + slug)
     try:
-        sources = None
-        for attempt in range(3):
-            try:
-                sources = await episode_sources(client, slug, episode, dub)
-                if sources:                     # got sources, exit loop
-                    break
-                await asyncio.sleep(1)
-            except Exception as e:                  # noqa: BLE001
-                if attempt == 2:                # last attempt
-                    log.append(f"{slug} ep {episode} — {type(e).__name__}: {str(e)[:100]}")
-                await asyncio.sleep(1)        # back‑off before next try
-        return sources if sources else [], log
+        return await episode_sources(client, slug, episode, dub), []
     except Exception as e:                  # noqa: BLE001
         return [], [f"ptbr: {slug} ep {episode} — {type(e).__name__}: {str(e)[:100]}"]
 
 
 async def available(client, show_id: str, title: str = "") -> dict:
     """Quais áudios PT-BR existem para o anime (para o menu mostrar só o que há)."""
-    titles = [title, title_from_slug(show_id)]
-    dub, sub = await asyncio.gather(find_slug(client, titles, True),
-                                    find_slug(client, titles, False),
+    import titles as _titles
+    names = await _titles.candidates(client, show_id, title)
+    dub, sub = await asyncio.gather(find_slug(client, names, True),
+                                    find_slug(client, names, False),
                                     return_exceptions=True)
     return {"dub-pt": bool(dub) and not isinstance(dub, Exception),
             "sub-pt": bool(sub) and not isinstance(sub, Exception)}

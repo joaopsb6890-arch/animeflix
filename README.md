@@ -37,5 +37,22 @@ Se o episódio não tiver o áudio escolhido, o player desce a lista (dub PT-BR 
 ## Segurança do modo público
 `/proxy` só aceita links **assinados pelo próprio servidor** (HMAC), bloqueia hosts privados (SSRF), limita requisições por IP e streams simultâneos.
 
+## Filmes e séries
+Aba **Filmes** no app:
+- **Filmes / Séries** (catálogo TMDB): em alta, populares, busca, sinopse, trailer e *onde assistir legalmente no Brasil*. Precisa da chave grátis `TMDB_KEY` (themoviedb.org → Configurações → API).
+- **Grátis**: filmes de domínio público do Internet Archive, tocam direto no player.
+
+O app não liga fontes de streaming sem licença para filmes e séries.
+
+## Fonte reserva do GitHub (opcional)
+Hospede uma instância do [aniwatch-api](https://github.com/ghoshRitesh12/aniwatch-api) e informe `ANIWATCH_API=https://sua-instancia`. Quando o scraper interno falhar, o app tenta ela.
+
+## Dublagem não aparece? Diagnóstico
+Abra no navegador (troque o endereço e o id do anime):
+
+    https://SEU-APP/anime/diagnose/naruto-677?ep=1&tt=dub-pt&title=Naruto
+
+Mostra os títulos tentados, quantos resultados a busca achou, o site usado e o motivo da falha. `tt` pode ser `dub-pt`, `sub-pt`, `sub` ou `dub`.
+
 ## Se algo quebrar
 Os sites de origem mudam. Ajustes ficam em `hianime.py` (catálogo/embeds) e `ptbr.py` (`_cards`, `_video_links`). A resposta de `/anime/stream/...` traz um campo `log` dizendo o que falhou.

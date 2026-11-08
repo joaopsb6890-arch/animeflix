@@ -509,9 +509,8 @@ async def streams(client, slug_or_id, episode, trans: str = "sub",
     all_srvs = await servers(client, ep["epId"])
     srvs = [s for s in all_srvs if s["type"] == trans]
     if not srvs:
-        srvs = all_srvs
-        if srvs:
-            log.append(f"hianime: sem servidor '{trans}' no ep {episode}, usando os outros")
+        have = sorted({x["type"] for x in all_srvs})
+        return [], [f"hianime: ep {episode} não tem '{trans}' (tem: {', '.join(have) or 'nenhum servidor'})"]
     if only_server:
         picked = [s for s in srvs if only_server.lower() in s["name"].lower()]
         srvs = picked or srvs

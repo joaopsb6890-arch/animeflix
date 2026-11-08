@@ -3,7 +3,7 @@ ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
-COPY main.py hianime.py ptbr.py subs.py index.html ./
+COPY main.py hianime.py ptbr.py subs.py titles.py upstream.py movies.py index.html ./
 COPY static ./static
 RUN useradd -m app && chown -R app /app
 USER app

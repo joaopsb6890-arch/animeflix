@@ -24,7 +24,7 @@ import java.util.ArrayList;
 
 public class MainActivity extends Activity {
 
-    private static final String URL = "https://animeflix-8iap.onrender.com/"; // trocado por build_apk.sh (APP_URL)
+    private static final String URL = "https://animeflix.example.com/"; // trocado por build_apk.sh (APP_URL)
 
     private static final String OFFLINE =
             "<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'>"
@@ -77,6 +77,7 @@ public class MainActivity extends Activity {
                 }
                 customView = view;
                 customCb = cb;
+                setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
                 web.setVisibility(View.GONE);
                 root.addView(view, match());
             }
@@ -100,6 +101,17 @@ public class MainActivity extends Activity {
         public void enterPip(final int w, final int h) {
             runOnUiThread(new Runnable() {
                 @Override public void run() { requestPip(w, h); }
+            });
+        }
+
+        @JavascriptInterface
+        public void setLandscape(final boolean on) {
+            runOnUiThread(new Runnable() {
+                @Override public void run() {
+                    setRequestedOrientation(on
+                            ? android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                            : android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+                }
             });
         }
 
@@ -135,6 +147,7 @@ public class MainActivity extends Activity {
         if (customView == null) return;
         root.removeView(customView);
         customView = null;
+        setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
         web.setVisibility(View.VISIBLE);
         if (customCb != null) {
             customCb.onCustomViewHidden();

@@ -34,8 +34,11 @@ from starlette.background import BackgroundTask
 from starlette.middleware.gzip import GZipMiddleware
 
 import hianime
+import movies
 import ptbr
 import subs
+import titles
+import upstream
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATIC = os.path.join(HERE, "static")
@@ -92,7 +95,7 @@ def _sign_source(src: dict) -> dict:
     """Cópia da fonte com url, legendas e pôster já passando pelo proxy assinado."""
     ref = src.get("referer") or ""
     out = dict(src)
-    out["url"] = psign(src.get("url", ""), ref)
+    out["url"] = src["url"] if src.get("direct") else psign(src.get("url", ""), ref)
     if src.get("poster"):
         out["poster"] = psign(src["poster"], ref)
     out["subs"] = [dict(t, url=psign(t.get("url", ""), ref)) for t in src.get("subs") or [] if t.get("url")]
@@ -293,10 +296,38 @@ async def stream(show_id: str = Path(...), ep: str = Query(...),
             sources, log = await ptbr.streams(client, show_id, ep, trans == "dub-pt", title)
         else:
             sources, log = await hianime.streams(client, show_id, ep, trans, server)
+            if not sources and upstream.enabled():       # plano B: aniwatch-api (GitHub)
+                eps = await hianime.episodes(client, show_id)
+                target = hianime.find_episode(eps, ep)
+                if target:
+                    more, ulog = await upstream.streams(client, show_id, target["epId"], trans)
+                    sources, log = more, log + ulog
     except Exception as e:
         raise _fail(e)
     return {"showId": show_id, "episode": ep, "translationType": trans,
             "server": server, "sources": [_sign_source(x) for x in sources], "log": log}
+
+
+@app.get("/anime/diagnose/{show_id}")
+async def diagnose(show_id: str = Path(...), ep: str = Query("1"),
+                   tt: str = Query("dub-pt"), title: str = Query("", max_length=200)):
+    """Passo a passo de por que um áudio não aparece. Abra no navegador e me mande o resultado."""
+    if tt not in VALID_TRANS:
+        raise HTTPException(400, "tt inválido")
+    client = await get_client()
+    out = {"showId": show_id, "ep": ep, "tt": tt, "upstream": upstream.enabled(),
+           "ptbrBase": ptbr.BASE, "trace": []}
+    try:
+        if tt in PT_TRANS:
+            sources, log = await ptbr.streams(client, show_id, ep, tt == "dub-pt", title, out["trace"])
+        else:
+            sources, log = await hianime.streams(client, show_id, ep, tt, "")
+        out["log"] = log
+        out["sources"] = [{"server": x["server"], "type": x["type"], "quality": x["quality"],
+                           "host": x["host"]} for x in sources]
+    except Exception as e:                  # noqa: BLE001
+        out["erro"] = f"{type(e).__name__}: {str(e)[:200]}"
+    return out
 
 
 @app.get("/anime/audios/{show_id}")
@@ -325,7 +356,55 @@ async def audios(show_id: str = Path(...), ep: str = Query("1"),
 async def config():
     """O que este servidor oferece — o app usa para esconder o que não funciona."""
     return {"name": "AnimeFlix", "version": app.version,
-            "features": {"subdl": subs.have_key(), "ptbr": True}}
+            "features": {"subdl": subs.have_key(), "ptbr": True, "tmdb": movies.have_tmdb(),
+                         "upstream": upstream.enabled()}}
+
+
+# ── filmes e séries ───────────────────────────────────────────────────────────
+@app.get("/movies/list")
+async def movies_list(which: str = Query("trending", pattern="^(trending|popular|top)$"),
+                      kind: str = Query("movie", pattern="^(movie|tv)$"), page: int = Query(1, ge=1, le=20)):
+    try:
+        return {"results": await movies.listing(await get_client(), which, kind, page)}
+    except Exception as e:
+        raise _fail(e)
+
+
+@app.get("/movies/search")
+async def movies_search(q: str = Query(..., min_length=2, max_length=100),
+                        kind: str = Query("movie", pattern="^(movie|tv)$"), page: int = Query(1, ge=1, le=20)):
+    try:
+        return {"results": await movies.search(await get_client(), q, kind, page)}
+    except Exception as e:
+        raise _fail(e)
+
+
+@app.get("/movies/detail/{kind}/{tmdb_id}")
+async def movies_detail(kind: str = Path(..., pattern="^(movie|tv)$"), tmdb_id: int = Path(..., ge=1)):
+    try:
+        return await movies.detail(await get_client(), kind, tmdb_id)
+    except Exception as e:
+        raise _fail(e)
+
+
+@app.get("/movies/free")
+async def movies_free(q: str = Query("", max_length=100), page: int = Query(1, ge=1, le=30)):
+    try:
+        return {"results": await movies.free_list(await get_client(), q.strip(), page)}
+    except Exception as e:
+        raise _fail(e)
+
+
+@app.get("/movies/stream/{ident}")
+async def movies_stream(ident: str = Path(...), ep: str = Query("1"), translationType: str = Query("sub"),
+                        title: str = Query("", max_length=200), server: str = Query("")):
+    """Mesmo formato de /anime/stream, para o player tocar filmes de domínio público."""
+    try:
+        sources = await movies.free_stream(await get_client(), ident)
+    except Exception as e:
+        raise _fail(e)
+    return {"showId": ident, "episode": "1", "translationType": "sub", "server": "",
+            "sources": [_sign_source(x) for x in sources], "log": []}
 
 
 @app.get("/healthz", include_in_schema=False)

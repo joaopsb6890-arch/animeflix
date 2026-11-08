@@ -22,9 +22,9 @@
         buildTabbar() {
             const bar = $('#tabbar');
             if (!bar) return;
-            const tabs = [['home', 'Início'], ['search', 'Buscar'], ['list', 'Minha lista'], ['history', 'Histórico'], ['more', 'Mais']];
+            const tabs = [['home', 'Início'], ['search', 'Buscar'], ['movies', 'Filmes'], ['list', 'Minha lista'], ['more', 'Mais']];
             bar.innerHTML = tabs.map(t => '<button class="tb" data-tab="' + t[0] + '" aria-label="' + t[1] + '">' +
-                AF.icon(t[0]) + '<span>' + t[1] + '</span></button>').join('');
+                AF.icon(t[0] === 'movies' ? 'film' : t[0]) + '<span>' + t[1] + '</span></button>').join('');
             AF.$$('.tb', bar).forEach(b => b.onclick = () => {
                 if (b.dataset.tab === 'more') AF.openMore();
                 else this.goTab(b.dataset.tab);
@@ -151,6 +151,7 @@
         const full = Object.assign({}, ctx, { epIdx: epIdx | 0 });
         const f = nav.push('player', { title: '▶ ' + (ctx.animeName || '') + ' · Ep ' + epLabel(full), ctx: full });
         f.player = new AF.Player(f);
+        f.player.autoFullscreen();           /* ainda dentro do toque: o navegador exige */
         drive(f, full, epIdx | 0);
         return f;
     };
@@ -189,6 +190,9 @@
             thumbnail: card.thumbnail || card.thumb || '',
             epNum: card.epNum || card.ep || opts.playEp || '',
         };
+        const tm = /^(movie|tv):(\d+)$/.exec(String(id));
+        if (tm) { AF.openTitle({ kind: tm[1], id: tm[2], title: use.name, thumbnail: use.thumbnail }); return null; }
+        if (String(id).startsWith('ia:')) { AF.playArchive({ id, title: use.name, thumbnail: use.thumbnail }); return null; }
         const existing = nav.byAnime(id);
         if (existing) {
             nav.toTop(existing);
@@ -298,6 +302,7 @@
             if (frame._hero) { clearInterval(frame._hero); frame._hero = 0; }
             root.innerHTML = '';
             if (ctx.tab === 'search') paintSearch(frame, root, gen, () => gen);
+            else if (ctx.tab === 'movies') paintMovies(frame, root, gen, () => gen);
             else if (ctx.tab === 'list') paintList(frame, root);
             else if (ctx.tab === 'history') paintHistory(frame, root);
             else paintStart(frame, root, gen, () => gen);
@@ -558,6 +563,147 @@
         if (ctx.query) run(false); else suggestions();
         if (!ctx.query) setTimeout(() => input.focus(), 120);
     }
+
+    /* ── Filmes e séries ───────────────────────────────────────────────────── */
+    ICO.film = '<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 5v14M16 5v14M4 10h4M16 10h4M4 14h4M16 14h4"/>';
+
+    function titleCard(item, onOpen) {
+        const card = el('div', 'card');
+        const badges = [];
+        if (item.score) badges.push('<span class="bg sc">★ ' + esc(item.score) + '</span>');
+        if (item.kind === 'archive') badges.push('<span class="bg dub">GRÁTIS</span>');
+        card.innerHTML =
+            '<div class="cw"><img loading="lazy" alt=""><div class="badges">' + badges.join('') + '</div></div>' +
+            '<div class="ci"><div class="ct">' + esc(item.title) + '</div><div class="cm">' + esc(item.year || '') + '</div></div>';
+        const img = $('img', card);
+        img.src = item.thumbnail || AF.NO_IMG;
+        img.onerror = () => { img.onerror = null; img.src = AF.NO_IMG; };
+        card.onclick = () => onOpen(item);
+        return card;
+    }
+
+    function fillGrid(grid, items, onOpen, append) {
+        if (!append) grid.innerHTML = '';
+        if (!items.length && !append) { grid.innerHTML = '<div class="hint">Nada encontrado.</div>'; return; }
+        items.forEach(i => grid.appendChild(titleCard(i, onOpen)));
+    }
+
+    function paintMovies(frame, root, gen, cur) {
+        const ctx = frame.ctx;
+        ctx.mv = ctx.mv || 'movie';
+        root.innerHTML = '<div class="page-h"><h2>Filmes e séries</h2></div>' +
+            '<div class="seg"><button data-m="movie">Filmes</button><button data-m="tv">Séries</button><button data-m="free">Grátis</button></div>' +
+            '<div data-body></div>';
+        const body = $('[data-body]', root);
+        const draw = () => {
+            AF.$$('.seg button', root).forEach(b => b.classList.toggle('on', b.dataset.m === ctx.mv));
+            body.innerHTML = '';
+            if (ctx.mv === 'free') paintFree(body, gen, cur);
+            else paintTmdb(body, ctx.mv, gen, cur);
+        };
+        AF.$$('.seg button', root).forEach(b => b.onclick = () => { ctx.mv = b.dataset.m; draw(); });
+        (AF._cfgP || Promise.resolve()).then(() => { if (gen === cur()) draw(); });
+    }
+
+    function searchBox(placeholder, onQuery) {
+        const box = el('div', 'sv', '<div class="sv-bar">' + AF.icon('search') +
+            '<input type="search" placeholder="' + esc(placeholder) + '" autocomplete="off" aria-label="Buscar"></div>');
+        let t = 0;
+        $('input', box).oninput = e => { clearTimeout(t); const v = e.target.value.trim(); t = setTimeout(() => onQuery(v), 400); };
+        return box;
+    }
+
+    function paintTmdb(body, kind, gen, cur) {
+        if (!AF.features.tmdb) {
+            body.innerHTML = '<div class="hint">O catálogo de filmes e séries precisa de uma chave grátis do TMDB no servidor.<br>' +
+                '<small>themoviedb.org → Configurações → API → copie a chave e defina <b>TMDB_KEY</b> no Render. Enquanto isso, a aba <b>Grátis</b> já funciona.</small></div>';
+            return;
+        }
+        const results = el('div', 'grid');
+        const rails = el('div');
+        body.appendChild(searchBox(kind === 'tv' ? 'Buscar série' : 'Buscar filme', async q => {
+            if (q.length < 2) { results.innerHTML = ''; rails.style.display = ''; return; }
+            rails.style.display = 'none';
+            results.innerHTML = '<div class="hint">Buscando…</div>';
+            try { fillGrid(results, (await AF.apiGet('/movies/search?kind=' + kind + '&q=' + encodeURIComponent(q))).results || [], AF.openTitle); }
+            catch (e) { results.innerHTML = ''; results.appendChild(errorBox(e, () => { })); }
+        }));
+        body.appendChild(results);
+        body.appendChild(rails);
+        [['trending', 'Em alta'], ['popular', 'Populares'], ['top', 'Mais bem avaliados']].forEach(([which, title]) => {
+            const sec = el('section', 'rail', '<div class="rail-h"><h3>' + esc(title) + '</h3></div><div class="rail-row">' + '<div class="skel"></div>'.repeat(4) + '</div>');
+            rails.appendChild(sec);
+            fetchCat('/movies/list?which=' + which + '&kind=' + kind).then(d => {
+                if (gen !== cur()) return;
+                const row = $('.rail-row', sec);
+                row.innerHTML = '';
+                (d.results || []).forEach(i => row.appendChild(titleCard(i, AF.openTitle)));
+                if (!row.children.length) sec.remove();
+            }).catch(e => { if (gen === cur()) { sec.innerHTML = ''; sec.appendChild(errorBox(e, () => { })); } });
+        });
+    }
+
+    function paintFree(body, gen, cur) {
+        body.appendChild(el('div', 'hint', 'Filmes de domínio público do Internet Archive — liberados para assistir de graça.'));
+        const grid = el('div', 'grid');
+        const more = el('div', 'morebar', '<button class="btn ghost" style="display:none">Carregar mais</button>');
+        let page = 1, q = '';
+        const load = async (append) => {
+            if (!append) grid.innerHTML = '<div class="hint">Carregando…</div>';
+            try {
+                const d = await AF.apiGet('/movies/free?page=' + page + '&q=' + encodeURIComponent(q));
+                if (gen !== cur()) return;
+                fillGrid(grid, d.results || [], AF.openTitle, append);
+                $('button', more).style.display = (d.results || []).length >= 30 ? '' : 'none';
+            } catch (e) { if (gen === cur()) { grid.innerHTML = ''; grid.appendChild(errorBox(e, () => load(append))); } }
+        };
+        body.appendChild(searchBox('Buscar filme clássico', v => { q = v.length >= 2 ? v : ''; page = 1; load(false); }));
+        body.appendChild(grid);
+        body.appendChild(more);
+        $('button', more).onclick = () => { page++; load(true); };
+        load(false);
+    }
+
+    /* toca um filme do Internet Archive no mesmo player dos episódios */
+    AF.playArchive = (item) => {
+        const id = String(item.id || '').replace(/^ia:/, '');
+        AF.openPlayer({
+            animeId: 'ia:' + id, animeName: item.title || item.name || id, single: true,
+            streamBase: '/movies/stream/', poster: item.thumbnail || item.thumb || '',
+            eps: [{ number: '1', epId: '1', name: item.title || id }], tt: 'sub',
+        }, 0);
+    };
+
+    AF.openTitle = async (item) => {
+        if (item.kind === 'archive') {
+            return AF.openSheet({
+                title: item.title, sub: [item.year, 'domínio público'].filter(Boolean).join(' · '),
+                items: [
+                    item.overview ? { label: item.overview } : null,
+                    { label: 'Assistir agora', run: () => setTimeout(() => AF.playArchive(item), 200) },
+                ].filter(Boolean),
+            });
+        }
+        let d = item;
+        try { d = Object.assign({}, item, await AF.apiGet('/movies/detail/' + item.kind + '/' + item.id)); }
+        catch (e) { AF.toast('Não consegui carregar os detalhes', 3000); }
+        const w = d.watch || {}, items = [];
+        const meta = [d.year, d.kind === 'tv' ? (d.seasons ? d.seasons + ' temporada(s)' : 'Série') : (d.runtime ? d.runtime + ' min' : 'Filme'),
+            d.score ? '★ ' + d.score : ''].filter(Boolean).join(' · ');
+        if (d.overview) items.push({ label: d.overview });
+        if (d.genres && d.genres.length) items.push({ head: d.genres.join(' · ') });
+        if (w.stream && w.stream.length) items.push({ head: 'Para assistir no Brasil: ' + w.stream.join(', ') });
+        else if ((w.rent && w.rent.length) || (w.buy && w.buy.length)) items.push({ head: 'Aluguel ou compra: ' + (w.rent || []).concat(w.buy || []).filter((x, i, a) => a.indexOf(x) === i).slice(0, 5).join(', ') });
+        else items.push({ head: 'Não achei onde assistir legalmente no Brasil agora.' });
+        if (d.trailer) items.push({ label: 'Ver trailer', hint: 'abre o YouTube', run: () => { window.open('https://www.youtube.com/watch?v=' + d.trailer, '_blank'); return 'keep'; } });
+        if (w.link) items.push({ label: 'Ver todas as opções para assistir', run: () => { window.open(w.link, '_blank'); return 'keep'; } });
+        const fid = d.kind + ':' + d.id;
+        items.push({
+            label: AF.favs.has(fid) ? 'Tirar da minha lista' : 'Adicionar à minha lista',
+            run: () => { AF.favs.toggle({ _id: fid, name: d.title, thumbnail: d.thumbnail, tmdb: true }); return 'lista atualizada'; },
+        });
+        AF.openSheet({ title: d.title, sub: meta, items });
+    };
 
     /* ── Minha lista (favoritos + fila) e Histórico ────────────────────────── */
     function paintList(frame, root) {

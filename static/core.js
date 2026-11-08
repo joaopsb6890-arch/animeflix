@@ -135,10 +135,10 @@ AF.toast = (msg, ms = 3800, action) => {
 AF.DEFAULTS = {
     volume: 1, muted: false, rate: 1, seekStep: 10, longPressRate: 2,
     tt: 'sub', server: '', quality: '', autoNext: true, resumePrompt: true,
-    autoPtSub: true, onboarded: false,
+    autoPtSub: true, onboarded: false, autoFs: true,
     autoSkipIntro: false, autoSkipOutro: false, gestures: true, uiHide: 3200,
     dim: 100, fit: 'contain',
-    sub: { on: true, idx: -1, key: '', size: 100, color: '#ffffff', box: true, outline: true, delay: 0, pos: 72 },
+    sub: { on: true, idx: -1, key: '', size: 100, color: '#ffffff', box: true, outline: true, delay: 0, pos: 90 },
 };
 
 const PREF_KEY = 'animeflix.prefs';
@@ -152,6 +152,7 @@ AF.cfg = {
                 const saved = JSON.parse(raw);
                 this.data = Object.assign(JSON.parse(JSON.stringify(AF.DEFAULTS)), saved);
                 this.data.sub = Object.assign({}, AF.DEFAULTS.sub, saved.sub || {});
+                if (this.data.sub.pos === 72) this.data.sub.pos = 90;   /* antigo padrão: ficava no meio da tela */
             }
         } catch (e) { /* prefs corrompidas: volta ao padrão */ }
         return this.data;
