@@ -284,6 +284,26 @@ async def servers(show_id: str = Path(...), ep: str = Query(...)):
 
 
 # ── streams ───────────────────────────────────────────────────────────────────
+async def _en_sources(client, show_id: str, ep: str, trans: str, server: str = ""):
+    """sub/dub do hianime; se o scraper interno falhar, tenta as APIs reservas do GitHub."""
+    sources, log = await hianime.streams(client, show_id, ep, trans, server)
+    if sources:
+        return sources, log
+    try:
+        if upstream.enabled():                              # aniwatch-api (v2) próprio
+            eps = await hianime.episodes(client, show_id)
+            target = hianime.find_episode(eps, ep)
+            if target:
+                more, ulog = await upstream.streams(client, show_id, target["epId"], trans)
+                sources, log = more, log + ulog
+        if not sources:                                     # API pública do README (formato antigo)
+            more, ulog = await upstream.legacy_streams(client, show_id, ep, trans)
+            sources, log = more, log + ulog
+    except Exception as e:                                  # noqa: BLE001 — reserva nunca derruba o player
+        log.append(f"reserva: {type(e).__name__} {str(e)[:80]}")
+    return sources, log
+
+
 @app.get("/anime/stream/{show_id}")
 async def stream(show_id: str = Path(...), ep: str = Query(...),
                  translationType: str = Query("sub"), server: str = Query(""),
@@ -295,13 +315,7 @@ async def stream(show_id: str = Path(...), ep: str = Query(...),
         if trans in PT_TRANS:
             sources, log = await ptbr.streams(client, show_id, ep, trans == "dub-pt", title)
         else:
-            sources, log = await hianime.streams(client, show_id, ep, trans, server)
-            if not sources and upstream.enabled():       # plano B: aniwatch-api (GitHub)
-                eps = await hianime.episodes(client, show_id)
-                target = hianime.find_episode(eps, ep)
-                if target:
-                    more, ulog = await upstream.streams(client, show_id, target["epId"], trans)
-                    sources, log = more, log + ulog
+            sources, log = await _en_sources(client, show_id, ep, trans, server)
     except Exception as e:
         raise _fail(e)
     return {"showId": show_id, "episode": ep, "translationType": trans,
@@ -321,7 +335,7 @@ async def diagnose(show_id: str = Path(...), ep: str = Query("1"),
         if tt in PT_TRANS:
             sources, log = await ptbr.streams(client, show_id, ep, tt == "dub-pt", title, out["trace"])
         else:
-            sources, log = await hianime.streams(client, show_id, ep, tt, "")
+            sources, log = await _en_sources(client, show_id, ep, tt, "")
         out["log"] = log
         out["sources"] = [{"server": x["server"], "type": x["type"], "quality": x["quality"],
                            "host": x["host"]} for x in sources]
@@ -358,7 +372,7 @@ async def config():
     return {"name": "AnimeFlix", "version": app.version,
             "features": {"subdl": subs.have_key(), "ptbr": True, "tmdb": movies.have_tmdb(),
                          "youtube": movies.have_youtube(),
-                         "upstream": upstream.enabled()}}
+                         "upstream": upstream.enabled() or upstream.legacy_enabled()}}
 
 
 # ── filmes e séries ───────────────────────────────────────────────────────────

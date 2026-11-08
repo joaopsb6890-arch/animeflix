@@ -47,6 +47,8 @@ O app não liga fontes de streaming sem licença para filmes e séries.
 ## Fonte reserva do GitHub (opcional)
 Hospede uma instância do [aniwatch-api](https://github.com/ghoshRitesh12/aniwatch-api) e informe `ANIWATCH_API=https://sua-instancia`. Quando o scraper interno falhar, o app tenta ela.
 
+A API pública do README `aniwatch-api-v1-0.onrender.com` já vem ligada como segunda reserva (formato antigo `/api/episode`, `/api/server`, `/api/src-server`). Troque com `LEGACY_API=https://outra-instancia` ou desligue com `LEGACY_API=off`. Ela só cobre áudio **original/legendado e dublado em inglês**; a dublagem PT-BR vem do `ptbr.py`.
+
 ## APIs do Google (opcional)
 `YOUTUBE_KEY` (console.cloud.google.com → ativar *YouTube Data API v3* → criar chave): liga o botão **Trailer** na ficha dos animes e toca o trailer dentro do app.
 
