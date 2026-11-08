@@ -24,7 +24,7 @@ import java.util.ArrayList;
 
 public class MainActivity extends Activity {
 
-    private static final String URL = "https://animeflix.example.com/"; // trocado por build_apk.sh (APP_URL)
+    private static final String URL = "https://animeflix-8iap.onrender.com/"; // trocado por build_apk.sh (APP_URL)
 
     private static final String OFFLINE =
             "<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'>"
